@@ -1,0 +1,102 @@
+name: Build Android APK
+
+# 触发：手动 / 推送到 android-app、build_dataset.py 或本工作流时
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android-app/**'
+      - 'build_dataset.py'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: write   # 允许发布 gh-pages 分支
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # App 运行时拉取最新数据的地址：gh-pages 分支的 raw URL（公开仓库可匿名访问）
+      DATA_URL: "https://raw.githubusercontent.com/${{ github.repository_owner }}/stock-screener-android/gh-pages/stocks.json"
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 安装 Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装 Android SDK（platform 34 + build-tools）
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
+
+      - name: 安装 Gradle 8.9（AGP 8.5.2 需要 ≥8.7）
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.9'
+
+      - name: 生成最新行情数据（联网抓取新浪/东财/腾讯，约 10–20 分钟）
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          python build_dataset.py
+          ls -lh data/ 2>/dev/null || true
+
+      - name: 数据兜底（上一步失败则写最小占位，保证构建不中断）
+        run: |
+          python - <<'PY'
+          import json, os, datetime
+          os.makedirs('data', exist_ok=True)
+          p = 'data/stocks.json'
+          ok = False
+          try:
+              d = json.load(open(p, encoding='utf-8'))
+              ok = bool(d.get('stocks')) and d.get('meta', {}).get('factors') is not None
+          except Exception:
+              ok = False
+          if not ok:
+              ph = {"meta": {"source": "sample",
+                      "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                      "count": 0, "factors": [], "categories": [],
+                      "note": "CI 数据生成失败，请在 App 内点『刷新』拉取远程数据"},
+                    "stocks": []}
+              json.dump(ph, open(p, 'w', encoding='utf-8'), ensure_ascii=False)
+              with open('data/data.js', 'w', encoding='utf-8') as f:
+                  f.write('window.STOCK_DATA = ' + json.dumps(ph, ensure_ascii=False) + ';')
+              print("placeholder written")
+          else:
+              print("real data ok")
+          PY
+
+      - name: 拷贝数据到安卓 assets（离线兜底）
+        run: |
+          mkdir -p android-app/app/src/main/assets/data
+          cp data/data.js android-app/app/src/main/assets/data/data.js
+          cp data/stocks.json android-app/app/src/main/assets/data/stocks.json
+
+      - name: 发布 stocks.json 到 gh-pages（供 App 运行时拉取）
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: data
+          publish_branch: gh-pages
+          keep_files: false
+
+      - name: 编译 Debug APK
+        working-directory: android-app
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: 上传 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-screener-debug-apk
+          path: android-app/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
