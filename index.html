@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能选股系统 · Smart Stock Screener</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --panel:#ffffff; --ink:#1f2937; --muted:#6b7280;
+    --line:#e5e7eb; --brand:#2563eb; --brand-soft:#eff6ff;
+    --up:#dc2626; --down:#16a34a; --amber:#d97706; --good:#16a34a;
+    --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+  header{background:linear-gradient(120deg,#1e3a8a,#2563eb);color:#fff;padding:16px 22px;
+         display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  header h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.5px}
+  header .sub{opacity:.85;font-size:12px;margin-top:2px}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .badge.sample{background:#fef3c7;color:#92400e}
+  .badge.real{background:#dcfce7;color:#166534}
+  .hdr-ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #refreshBtn{cursor:pointer;border:1px solid rgba(255,255,255,.7);background:rgba(255,255,255,.16);
+        color:#fff;font-weight:600;font-size:12px;padding:4px 12px;border-radius:999px}
+  #refreshBtn:active{background:rgba(255,255,255,.32)}
+  #dataStatus{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px}
+  #dataStatus.local{background:rgba(255,255,255,.15);color:#fff}
+  #dataStatus.live{background:#dcfce7;color:#166534}
+  #dataStatus.busy{background:#fef3c7;color:#92400e}
+  .layout{display:flex;gap:16px;padding:16px;align-items:flex-start}
+  aside{width:340px;flex:0 0 340px;position:sticky;top:12px}
+  main{flex:1;min-width:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        box-shadow:var(--shadow);padding:14px 16px;margin-bottom:16px}
+  .card h2{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .card h2 .tag{font-size:11px;font-weight:600;color:var(--brand);background:var(--brand-soft);
+        padding:2px 8px;border-radius:6px}
+  .presets{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+  .presets button{cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);
+        padding:6px 12px;border-radius:8px;font-size:13px;transition:.15s}
+  .presets button:hover{border-color:var(--brand);color:var(--brand);background:var(--brand-soft)}
+  .presets button.reset{background:#f3f4f6}
+  .cat{margin-top:12px}
+  .cat-title{font-weight:700;font-size:13px;color:#374151;margin:6px 0 4px;
+        border-left:3px solid var(--brand);padding-left:8px}
+  .factor{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-bottom:8px;background:#fcfcfd}
+  .factor .row1{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .factor .fname{font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px}
+  .factor .desc{color:var(--muted);font-size:11.5px;margin:3px 0 6px}
+  .factor .ctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .factor .ctl label{font-size:11.5px;color:var(--muted)}
+  .factor input[type=number]{width:74px;padding:4px 6px;border:1px solid var(--line);
+        border-radius:6px;font-size:12.5px}
+  .factor input.w{width:56px}
+  .factor.disabled{opacity:.5}
+  .switch{position:relative;width:34px;height:19px;flex:0 0 34px}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;cursor:pointer;inset:0;background:#cbd5e1;border-radius:999px;transition:.2s}
+  .slider:before{content:"";position:absolute;height:15px;width:15px;left:2px;top:2px;
+        background:#fff;border-radius:50%;transition:.2s}
+  .switch input:checked + .slider{background:var(--brand)}
+  .switch input:checked + .slider:before{transform:translateX(15px)}
+
+  .summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .stat{flex:1;min-width:120px;background:var(--brand-soft);border:1px solid #dbeafe;
+        border-radius:10px;padding:10px 12px}
+  .stat .n{font-size:22px;font-weight:800;color:#1e3a8a}
+  .stat .l{font-size:12px;color:#475569}
+
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .toolbar select,.toolbar input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+  .toolbar button{cursor:pointer;border:1px solid var(--brand);background:var(--brand);color:#fff;
+        padding:6px 14px;border-radius:8px;font-size:13px}
+  .toolbar button.ghost{background:#fff;color:var(--brand)}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{position:sticky;top:0;background:#f1f5f9;text-align:right;padding:8px 10px;
+        border-bottom:2px solid var(--line);cursor:pointer;white-space:nowrap;font-size:12.5px}
+  thead th:first-child,thead th.lh{text-align:left}
+  tbody td{padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap}
+  tbody td.lh{text-align:left}
+  tbody tr:hover{background:#f8fafc}
+  .rank{font-weight:700;color:#475569}
+  .up{color:var(--up);font-weight:600}
+  .down{color:var(--down);font-weight:600}
+  .scorebar{display:inline-block;height:9px;border-radius:5px;background:linear-gradient(90deg,#22c55e,#eab308,#ef4444);
+        vertical-align:middle;margin-right:6px}
+  .scnum{font-weight:700}
+  .detail-row td{background:#fafbff;padding:0}
+  .detail-inner{padding:10px 14px;font-size:12.5px;color:#374151}
+  .detail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 18px}
+  .detail-grid div{display:flex;justify-content:space-between;border-bottom:1px dashed #eef2f7;padding:2px 0}
+  .pill{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;background:#eef2ff;color:#3730a3;margin-left:6px}
+
+  .charts{display:flex;gap:16px;flex-wrap:wrap}
+  .chart-box{flex:1;min-width:280px}
+  .hist{display:flex;align-items:flex-end;gap:4px;height:150px;padding-top:6px}
+  .hist .bar{flex:1;background:var(--brand);border-radius:3px 3px 0 0;position:relative;min-height:2px}
+  .hist .bar span{position:absolute;bottom:-16px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted)}
+  .axis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-top:18px}
+  .scatter{width:100%;height:auto;background:#fbfcfe;border:1px solid var(--line);border-radius:8px}
+  .legend{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .tip{position:fixed;pointer-events:none;background:#111827;color:#fff;padding:6px 9px;border-radius:6px;
+        font-size:11.5px;z-index:50;opacity:0;transition:.1s;white-space:nowrap}
+  .disclaim{font-size:12px;color:var(--amber);background:#fffbeb;border:1px solid #fde68a;
+        border-radius:10px;padding:10px 14px;margin-bottom:16px}
+  .linkbtn{color:var(--brand);cursor:pointer;text-decoration:underline}
+  footer{color:var(--muted);font-size:11.5px;text-align:center;padding:18px}
+  @media(max-width:980px){.layout{flex-direction:column}aside{width:100%;flex:none;position:static}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>📊 智能选股系统</h1>
+    <div class="sub">市场主流多维因子 · 价值 / 质量 / 成长 / 动量 / 规模 综合评分</div>
+  </div>
+  <div class="hdr-ctrl">
+    <span id="dataStatus" class="local">内置数据</span>
+    <button id="refreshBtn">↻ 刷新</button>
+    <span id="sourceBadge"></span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- 左侧：因子控制面板 -->
+  <aside>
+    <div class="card">
+      <h2>策略预设 <span class="tag">一键切换</span></h2>
+      <div class="presets" id="presets"></div>
+      <div class="presets" style="margin-top:8px">
+        <button class="reset" id="resetBtn">↺ 恢复默认参数</button>
+        <button class="reset" id="clearBtn">清空全部筛选</button>
+      </div>
+    </div>
+
+    <div class="card" id="factorPanel">
+      <h2>选股因子 <span class="tag">可逐项调</span></h2>
+      <div id="factors"></div>
+    </div>
+  </aside>
+
+  <!-- 右侧：结果 -->
+  <main>
+    <div class="disclaim" id="disclaim"></div>
+
+    <div class="card">
+      <div class="summary" id="summary"></div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <span>显示前</span>
+        <select id="topN">
+          <option value="30">30</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="9999">全部</option>
+        </select>
+        <span>名</span>
+        <input type="text" id="searchBox" placeholder="搜索代码/名称/行业" style="flex:1;min-width:140px">
+        <button class="ghost" id="exportBtn">⬇ 导出 CSV</button>
+      </div>
+      <div style="max-height:560px;overflow:auto">
+        <table id="resultTable">
+          <thead><tr id="theadRow"></tr></thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>分布与相关性 <span class="tag">可视化</span></h2>
+      <div class="charts">
+        <div class="chart-box">
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px">综合评分分布</div>
+          <div class="hist" id="hist"></div>
+          <div class="axis"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+        </div>
+        <div class="chart-box">
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px">市盈率 × ROE（点大小=市值，颜色=评分）</div>
+          <svg class="scatter" id="scatter" viewBox="0 0 360 260"></svg>
+          <div class="legend">越靠右上（低PE·高ROE）且越红，综合评分越高。样本示意。</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="tip" id="tip"></div>
+<footer>智能选股系统 v1 · 因子与权重均可在左侧实时调整 · 数据见顶部来源标识 · 仅供参考，不构成投资建议</footer>
+
+<script src="data/data.js"></script>
+<script>
+const STATE = { data:null, settings:{}, sortKey:"score", sortDir:-1, expanded:null };
+
+// ---------- 预设策略 ----------
+const PRESETS = {
+  "价值/GARP": { pe_ttm:{on:1,max:25}, pb:{on:1,max:4}, roe:{on:1,min:10}, net_profit_yoy:{on:1,min:10},
+                 weights:{pe_ttm:1,pb:1,roe:1,net_profit_yoy:0.8} },
+  "高红利": { dividend_yield:{on:1,min:3}, roe:{on:1,min:10}, pe_ttm:{on:1,max:20}, pb:{on:1,max:2},
+              weights:{dividend_yield:1.2,roe:1,pe_ttm:0.6,pb:0.6} },
+  "高成长": { net_profit_yoy:{on:1,min:20}, revenue_yoy:{on:1,min:15}, roe:{on:1,min:12},
+              weights:{net_profit_yoy:1.2,revenue_yoy:1,roe:1,pe_ttm:0.3} },
+  "高质量": { roe:{on:1,min:15}, gross_margin:{on:1,min:30}, debt_ratio:{on:1,max:60},
+              weights:{roe:1.2,gross_margin:1,debt_ratio:0.8} },
+  "稳健均衡": { pe_ttm:{on:1,max:30}, pb:{on:1,max:5}, roe:{on:1,min:10}, net_profit_yoy:{on:1,min:10},
+                total_mv:{on:1,min:50,max:5000},
+                weights:{pe_ttm:0.8,pb:0.7,roe:1,net_profit_yoy:0.8,total_mv:0.3} },
+  "技术突破": { ma_bullish:{on:1,min:1}, vol_double_10d:{on:1,min:1}, roe:{on:1,min:8}, pe_ttm:{on:1,max:60},
+                total_mv:{on:1,min:50,max:8000},
+                weights:{ma_bullish:1.8,vol_double_10d:1.4,roe:0.8,pe_ttm:0.3,total_mv:0.3} },
+};
+
+// 结果表列定义（顺序即展示顺序）
+const COLS = [
+  {k:"rank", t:"#", l:1},
+  {k:"name", t:"名称/代码", l:1},
+  {k:"sector", t:"行业", l:1},
+  {k:"score", t:"综合评分", l:0},
+  {k:"ma_bullish", t:"多头排列", l:0, bool:1},
+  {k:"vol_double_10d", t:"近10日倍量", l:0, bool:1},
+  {k:"pe_ttm", t:"PE", l:0},
+  {k:"pb", t:"PB", l:0},
+  {k:"roe", t:"ROE%", l:0},
+  {k:"net_profit_yoy", t:"净利同比%", l:0},
+  {k:"dividend_yield", t:"股息%", l:0},
+  {k:"total_mv", t:"市值(亿)", l:0},
+  {k:"change_pct", t:"涨跌%", l:0},
+];
+
+// ---------- 工具 ----------
+const $ = s => document.querySelector(s);
+function fmt(v, d){ if(v===null||v===undefined||isNaN(v)) return "—"; return Number(v).toFixed(d); }
+function num(v){ return (v===null||v===undefined||isNaN(v))? null : Number(v); }
+
+// ---------- 加载数据 ----------
+async function load(){
+  try{
+    let json = window.STOCK_DATA || null;
+    // 兜底：内嵌数据不存在时（如经 http 服务器且 data.js 缺失）再尝试 fetch
+    if(!json){
+      try{ const res = await fetch("data/stocks.json"); json = await res.json(); }catch(_){}
+    }
+    if(!json){ throw new Error("无可用数据（window.STOCK_DATA 与 data/stocks.json 均未加载）"); }
+    STATE.data = json;
+    STATE.fmap = {}; json.meta.factors.forEach(f=> STATE.fmap[f.key]=f);
+    initSettings();
+    renderMeta(json.meta);
+    renderPresets();
+    renderFactors(json.meta.factors);
+    renderThead(json.meta.factors);
+    recompute();
+    setDataStatus("内置数据 · " + (json.meta.generated_at||""), "local");
+    refreshData();
+  }catch(e){
+    document.getElementById("disclaim").textContent =
+      "数据加载失败：" + e.message + "。请确认 data/data.js 与页面同目录，或通过本地服务器打开。";
+  }
+}
+
+// ---------- 远程数据（安卓 App / PWA） ----------
+const DEFAULT_REMOTE_URL = ""; // 浏览器模式下可填托管地址；App 内由原生层注入
+
+function setDataStatus(text, mode){ // mode: "local" | "live" | "busy"
+  const el = document.getElementById("dataStatus");
+  if(!el) return;
+  el.textContent = text;
+  el.className = mode || "local";
+}
+
+function refreshData(){
+  // 优先走原生层（安卓 App）：由 Java 下载并注入 __applyRemoteData，绕开浏览器跨域限制
+  if(window.NativeBridge && typeof window.NativeBridge.refresh === "function"){
+    setDataStatus("正在拉取最新数据…", "busy");
+    window.NativeBridge.refresh();
+    return;
+  }
+  // 浏览器 / PWA 回退：直接 fetch 托管 JSON
+  const url = (window.NativeConfig && window.NativeConfig.getDataUrl && window.NativeConfig.getDataUrl()) || DEFAULT_REMOTE_URL;
+  if(!url) return;
+  setDataStatus("正在拉取最新数据…", "busy");
+  fetch(url + (url.indexOf("?")>=0?"&":"?") + "_=" + Date.now())
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d=> applyRemoteData(d))
+    .catch(()=> setDataStatus("拉取失败，仍用内置数据", "local"));
+}
+
+window.__applyRemoteData = function(d){
+  if(!d || !d.stocks || !d.meta) return;
+  STATE.data = d;
+  STATE.fmap = {}; d.meta.factors.forEach(f=> STATE.fmap[f.key]=f);
+  initSettings();
+  renderMeta(d.meta);
+  renderPresets();
+  renderFactors(d.meta.factors);
+  renderThead(d.meta.factors);
+  recompute();
+  setDataStatus("实时已更新 · " + (d.meta.generated_at||""), "live");
+};
+
+function initSettings(){
+  const f = STATE.data.meta.factors;
+  STATE.settings = {};
+  f.forEach(x=>{
+    STATE.settings[x.key] = {
+      on: x.enabled,
+      min: x.default_min, max: x.default_max,
+      weight: x.weight
+    };
+  });
+}
+
+function renderMeta(meta){
+  const b = document.getElementById("sourceBadge");
+  if(meta.source==="real"){
+    b.innerHTML = '<span class="badge real">真实数据 · '+meta.count+'只 · '+meta.generated_at+'</span>';
+  }else{
+    b.innerHTML = '<span class="badge sample">演示样本 · '+meta.count+'只 · '+meta.generated_at+'</span>';
+  }
+  document.getElementById("disclaim").textContent = "⚠️ " + meta.note;
+}
+
+function renderPresets(){
+  const box = document.getElementById("presets");
+  Object.keys(PRESETS).forEach(name=>{
+    const btn = document.createElement("button");
+    btn.textContent = name;
+    btn.onclick = ()=>applyPreset(name);
+    box.appendChild(btn);
+  });
+}
+
+function applyPreset(name){
+  const p = PRESETS[name];
+  const f = STATE.data.meta.factors;
+  // 先全部关，再按预设开
+  f.forEach(x=> STATE.settings[x.key].on = false);
+  Object.keys(p).forEach(k=>{
+    if(k==="weights") return;
+    if(STATE.settings[k]){
+      STATE.settings[k].on = true;
+      if(p[k].min!==undefined) STATE.settings[k].min = p[k].min;
+      if(p[k].max!==undefined) STATE.settings[k].max = p[k].max;
+    }
+  });
+  if(p.weights){
+    Object.keys(p.weights).forEach(k=>{ if(STATE.settings[k]) STATE.settings[k].weight = p.weights[k]; });
+  }
+  // 关闭未在预设中的因子评分参与（保留开启项），重新渲染控件
+  renderFactors(f);
+  recompute();
+}
+
+function renderFactors(factors){
+  const box = document.getElementById("factors");
+  box.innerHTML = "";
+  const cats = STATE.data.meta.categories;
+  cats.forEach(cat=>{
+    const catDiv = document.createElement("div");
+    catDiv.className = "cat";
+    catDiv.innerHTML = '<div class="cat-title">'+cat+'</div>';
+    factors.filter(f=>f.category===cat).forEach(f=>{
+      const s = STATE.settings[f.key];
+      const el = document.createElement("div");
+      el.className = "factor" + (s.on?"":" disabled");
+      let ctl = "";
+      if(f.filter==="max") ctl = '<label>≤</label><input type="number" data-k="'+f.key+'" data-f="max" value="'+s.max+'">';
+      else if(f.filter==="min") ctl = '<label>≥</label><input type="number" data-k="'+f.key+'" data-f="min" value="'+s.min+'">';
+      else if(f.filter==="range") ctl = '<label>≥</label><input type="number" data-k="'+f.key+'" data-f="min" value="'+s.min+'"><label>≤</label><input type="number" data-k="'+f.key+'" data-f="max" value="'+s.max+'">';
+      else ctl = '<label>仅评分</label>';
+      ctl += ' <label>权重</label><input type="number" class="w" step="0.1" min="0" data-k="'+f.key+'" data-f="weight" value="'+s.weight+'">';
+      el.innerHTML =
+        '<div class="row1"><div class="fname">'+f.label+
+        '<span class="pill">'+(f.direction==="lower"?"低优":"高优")+'</span></div>'+
+        '<label class="switch"><input type="checkbox" data-k="'+f.key+'" data-f="on" '+(s.on?"checked":"")+'><span class="slider"></span></label></div>'+
+        '<div class="desc">'+f.desc+'</div>'+
+        '<div class="ctl">'+ctl+'</div>';
+      catDiv.appendChild(el);
+    });
+    box.appendChild(catDiv);
+  });
+  // 绑定事件
+  box.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", ()=>{
+      const k = inp.dataset.k, f = inp.dataset.f;
+      STATE.settings[k][f] = (f==="on")? inp.checked : Number(inp.value);
+      if(f==="on") inp.closest(".factor").classList.toggle("disabled", !inp.checked);
+      recompute();
+    });
+  });
+}
+
+function renderThead(factors){
+  const row = document.getElementById("theadRow");
+  row.innerHTML = COLS.map(c=>'<th class="'+(c.l?"lh":"")+'" data-k="'+c.k+'">'+c.t+'</th>').join("");
+  row.querySelectorAll("th").forEach(th=>{
+    th.onclick = ()=>{
+      const k = th.dataset.k;
+      if(STATE.sortKey===k) STATE.sortDir *= -1;
+      else { STATE.sortKey = k; STATE.sortDir = (k==="name"||k==="sector")?1:-1; }
+      renderResults();
+    };
+  });
+}
+
+// ---------- 核心：评分引擎 ----------
+function computeScores(){
+  const stocks = STATE.data.stocks;
+  const factors = STATE.data.meta.factors;
+  const settings = STATE.settings;
+
+  // 1) 计算各因子在全样本中的百分排位（子分）
+  const subByFactor = {};
+  factors.forEach(f=>{
+    const vals = stocks.map(s=>num(s[f.key])).filter(v=>v!==null);
+    subByFactor[f.key] = {};
+    stocks.forEach(s=>{
+      const v = num(s[f.key]);
+      if(v===null){ subByFactor[f.key][s.code] = 50; return; }
+      let cnt;
+      if(f.direction==="higher"){
+        cnt = vals.filter(x=>x<=v).length;
+      }else{
+        cnt = vals.filter(x=>x>=v).length;
+      }
+      subByFactor[f.key][s.code] = vals.length? (cnt/vals.length*100):50;
+    });
+  });
+
+  // 2) 硬过滤 + 综合评分
+  const enabledFactors = factors.filter(f=>settings[f.key].on);
+  const results = [];
+  stocks.forEach(s=>{
+    let pass = true;
+    const reasons = [];
+    for(const f of enabledFactors){
+      const st = settings[f.key];
+      if(f.filter==="none") continue;
+      const v = num(s[f.key]);
+      if(v===null){ pass=false; reasons.push(f.label+"缺失"); break; }
+      if(f.filter==="max" && v > st.max){ pass=false; reasons.push(f.label+"≤"+st.max); break; }
+      if(f.filter==="min" && v < st.min){ pass=false; reasons.push(f.label+"≥"+st.min); break; }
+      if(f.filter==="range" && (v < st.min || v > st.max)){ pass=false; reasons.push(f.label+"区间"); break; }
+    }
+    if(!pass) return;
+
+    let wsum=0, ssum=0;
+    enabledFactors.forEach(f=>{
+      const w = settings[f.key].weight;
+      if(w>0){ ssum += subByFactor[f.key][s.code]*w; wsum += w; }
+    });
+    const score = wsum? ssum/wsum : 0;
+    results.push({ stock:s, score, subs:subByFactor, reasons });
+  });
+
+  results.forEach(r=> r.score = Math.round(r.score*10)/10);
+  // 排序
+  const k = STATE.sortKey, dir = STATE.sortDir;
+  results.sort((a,b)=>{
+    let va, vb;
+    if(k==="score"){ va=a.score; vb=b.score; }
+    else if(k==="name"){ va=a.stock.name; vb=b.stock.name; }
+    else if(k==="sector"){ va=a.stock.sector; vb=b.stock.sector; }
+    else if(k==="rank"){ va=a.score; vb=b.score; }
+    else { va=num(a.stock[k])||0; vb=num(b.stock[k])||0; }
+    if(typeof va==="string") return va.localeCompare(vb,"zh")*dir;
+    return (va-vb)*dir;
+  });
+  results.forEach((r,i)=> r.rank=i+1);
+  return { results, total:stocks.length, subByFactor };
+}
+
+let LAST = null;
+function recompute(){
+  LAST = computeScores();
+  renderSummary(LAST);
+  renderResults();
+  renderCharts(LAST);
+}
+
+function renderSummary(L){
+  const pass = L.results.length;
+  const avg = pass? (L.results.reduce((a,r)=>a+r.score,0)/pass):0;
+  const top = L.results.slice(0,5).map(r=>r.stock.name).join("、") || "—";
+  document.getElementById("summary").innerHTML =
+    '<div class="stat"><div class="n">'+L.total+'</div><div class="l">股票池总数</div></div>'+
+    '<div class="stat"><div class="n">'+pass+'</div><div class="l">通过筛选</div></div>'+
+    '<div class="stat"><div class="n">'+avg.toFixed(1)+'</div><div class="l">平均综合评分</div></div>'+
+    '<div class="stat"><div class="n" style="font-size:15px">'+top+'</div><div class="l">评分 Top5</div></div>';
+}
+
+function cellHtml(r, c){
+  const s = r.stock;
+  if(c.k==="rank") return '<td class="lh rank">'+r.rank+'</td>';
+  if(c.k==="name") return '<td class="lh"><b>'+s.name+'</b><br><span style="color:var(--muted);font-size:11px">'+s.code+'</span></td>';
+  if(c.k==="sector") return '<td class="lh">'+s.sector+'</td>';
+  if(c.k==="score"){ const w=Math.max(4,r.score); return '<td><span class="scorebar" style="width:'+w+'px"></span><span class="scnum">'+r.score.toFixed(1)+'</span></td>'; }
+  if(c.bool){ const v=num(s[c.k]); return '<td>'+(v===1?'<span style="color:var(--good);font-weight:700">✓</span>':'<span style="color:#cbd5e1">✗</span>')+'</td>'; }
+  if(c.k==="change_pct"){ const chg=num(s.change_pct); const cls=chg>0?"up":(chg<0?"down":""); const txt=chg>0?"+"+fmt(chg,2):fmt(chg,2); return '<td class="'+cls+'">'+txt+'</td>'; }
+  const f = STATE.fmap[c.k]; const d = f? f.decimals : 2;
+  return '<td>'+fmt(s[c.k],d)+'</td>';
+}
+
+function renderResults(){
+  const L = LAST; if(!L) return;
+  const topN = Number($("#topN").value);
+  const q = ($("#searchBox").value||"").trim().toLowerCase();
+  let list = L.results;
+  if(q) list = list.filter(r=> (r.stock.name+r.stock.code+r.stock.sector).toLowerCase().includes(q));
+  list = list.slice(0, topN);
+  const body = document.getElementById("resultBody");
+  body.innerHTML = "";
+  const span = COLS.length;
+  list.forEach(r=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = COLS.map(c=>cellHtml(r,c)).join("");
+    tr.style.cursor="pointer";
+    tr.onclick = ()=>toggleDetail(r);
+    body.appendChild(tr);
+    if(STATE.expanded===r.stock.code){
+      const dtr = document.createElement("tr");
+      dtr.className="detail-row";
+      dtr.innerHTML = '<td colspan="'+span+'"><div class="detail-inner">'+detailHtml(r)+'</div></td>';
+      body.appendChild(dtr);
+    }
+  });
+  if(!list.length) body.innerHTML = '<tr><td colspan="'+span+'" style="text-align:center;color:var(--muted);padding:24px">无符合条件的股票，请放宽左侧筛选条件</td></tr>';
+}
+
+function sparkSvg(arr){
+  if(!arr||!arr.length) return "";
+  const W=180,H=34, min=Math.min(...arr), max=Math.max(...arr), rng=(max-min)||1;
+  const pts=arr.map((v,i)=> (W*i/(arr.length-1)).toFixed(1)+","+(H-(v-min)/rng*H).toFixed(1)).join(" ");
+  const up = arr[arr.length-1]>=arr[0];
+  const col = up?"#dc2626":"#16a34a"; // 涨红跌绿
+  return '<svg width="180" height="34" style="vertical-align:middle"><polyline fill="none" stroke="'+col+'" stroke-width="1.4" points="'+pts+'"/></svg>';
+}
+
+function detailHtml(r){
+  const s = r.stock, sb = r.subs;
+  const keys = ["price","pe_ttm","pb","ps","dividend_yield","total_mv","circ_mv","turnover",
+                "volume_ratio","roe","gross_margin","debt_ratio","eps","net_profit_yoy","revenue_yoy","change_pct",
+                "ma5","ma10","ma20","ma60"];
+  const labels = {price:"现价",pe_ttm:"市盈率",pb:"市净率",ps:"市销率",dividend_yield:"股息率",
+    total_mv:"总市值(亿)",circ_mv:"流通市值(亿)",turnover:"换手率",volume_ratio:"量比",roe:"ROE",
+    gross_margin:"毛利率",debt_ratio:"资产负债率",eps:"每股收益",net_profit_yoy:"净利同比",
+    revenue_yoy:"营收同比",change_pct:"当日涨跌",ma5:"MA5",ma10:"MA10",ma20:"MA20",ma60:"MA60"};
+  let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">'+
+             '<b>近30日走势</b>'+sparkSvg(s.spark)+
+             '<span class="pill">均线多头：'+(s.ma_bullish===1?'是':'否')+'</span>'+
+             '<span class="pill">近10日倍量：'+(s.vol_double_10d===1?'是':'否')+'</span></div>';
+  html += '<div class="detail-grid">';
+  keys.forEach(k=>{
+    const f = STATE.fmap[k]; const d = f? f.decimals : 2;
+    const sub = sb[k]? sb[k][s.code] : null;
+    html += '<div><span>'+labels[k]+'</span><span><b>'+fmt(s[k],d)+'</b>'+
+            (sub!==null? ' <span class="pill">子分'+sub.toFixed(0)+'</span>':'')+'</span></div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function toggleDetail(r){
+  STATE.expanded = (STATE.expanded===r.stock.code)? null : r.stock.code;
+  renderResults();
+}
+
+// ---------- 图表 ----------
+function renderCharts(L){
+  // 直方图
+  const bins = new Array(10).fill(0);
+  L.results.forEach(r=>{ let i=Math.min(9, Math.floor(r.score/10)); bins[i]++; });
+  const maxb = Math.max(1,...bins);
+  const hist = document.getElementById("hist");
+  hist.innerHTML = "";
+  bins.forEach((c,i)=>{
+    const h = c/maxb*140;
+    const bar = document.createElement("div");
+    bar.className="bar"; bar.style.height = Math.max(2,h)+"px";
+    bar.title = (i*10)+"-"+((i+1)*10)+"分: "+c+"只";
+    bar.innerHTML = '<span>'+c+'</span>';
+    hist.appendChild(bar);
+  });
+
+  // 散点图 PE x ROE
+  const svg = document.getElementById("scatter");
+  const W=360,H=260, padL=42, padB=34, padT=12, padR=12;
+  const pts = L.results.filter(r=> num(r.stock.pe_ttm)!==null && num(r.stock.roe)!==null);
+  const peVals = pts.map(r=>num(r.stock.pe_ttm));
+  const roeVals = pts.map(r=>num(r.stock.roe));
+  if(!peVals.length){ svg.innerHTML=""; return; }
+  const peMax = Math.min(80, Math.max(...peVals)); // 截断极端值便于观察
+  const roeMax = Math.max(40, Math.max(...roeVals));
+  const x = v => padL + (v/peMax)*(W-padL-padR);
+  const y = v => H-padB - (v/roeMax)*(H-padT-padB);
+  let s = "";
+  // 网格 + 轴
+  s += '<line x1="'+padL+'" y1="'+(H-padB)+'" x2="'+(W-padR)+'" y2="'+(H-padB)+'" stroke="#cbd5e1"/>';
+  s += '<line x1="'+padL+'" y1="'+padT+'" x2="'+padL+'" y2="'+(H-padB)+'" stroke="#cbd5e1"/>';
+  s += '<text x="'+(W/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="10" fill="#6b7280">市盈率 PE →</text>';
+  s += '<text x="12" y="'+(H/2)+'" transform="rotate(-90 12 '+(H/2)+')" text-anchor="middle" font-size="10" fill="#6b7280">ROE% →</text>';
+  pts.slice(0,200).forEach(r=>{
+    const px = x(Math.min(peMax, num(r.stock.pe_ttm)));
+    const py = y(Math.min(roeMax, num(r.stock.roe)));
+    const sz = 2 + Math.sqrt(num(r.stock.total_mv))/6;
+    // 评分→颜色（红高绿低，中国习惯涨红）
+    const hue = (r.score/100)*120; // 0红 ->120绿
+    const col = "hsl("+hue+",70%,50%)";
+    s += '<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="'+sz.toFixed(1)+'" fill="'+col+'" fill-opacity="0.7" '+
+         'data-tip="'+r.stock.name+' PE'+fmt(r.stock.pe_ttm,1)+' ROE'+fmt(r.stock.roe,1)+'% 评分'+r.score.toFixed(1)+'"></circle>';
+  });
+  svg.innerHTML = s;
+  svg.querySelectorAll("circle").forEach(c=>{
+    c.addEventListener("mousemove", e=>showTip(e,c.getAttribute("data-tip")));
+    c.addEventListener("mouseleave", hideTip);
+  });
+}
+const tip = document.getElementById("tip");
+function showTip(e,txt){ tip.textContent=txt; tip.style.opacity=1; tip.style.left=(e.clientX+12)+"px"; tip.style.top=(e.clientY+12)+"px"; }
+function hideTip(){ tip.style.opacity=0; }
+
+// ---------- 导出 ----------
+$("#exportBtn").onclick = ()=>{
+  const L = LAST; if(!L) return;
+  const topN = Number($("#topN").value);
+  const list = L.results.slice(0, topN);
+  const head = "排名,代码,名称,行业,综合评分,均线多头排列,近10日倍量,PE,PB,ROE,净利润同比,股息率,总市值(亿),当日涨跌\n";
+  const rows = list.map(r=>[r.rank,r.stock.code,r.stock.name,r.stock.sector,r.score,
+    r.stock.ma_bullish,r.stock.vol_double_10d,
+    r.stock.pe_ttm,r.stock.pb,r.stock.roe,r.stock.net_profit_yoy,r.stock.dividend_yield,r.stock.total_mv,r.stock.change_pct].join(",")).join("\n");
+  const blob = new Blob([head+rows], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "选股结果.csv";
+  a.click();
+};
+
+// ---------- 按钮 ----------
+$("#resetBtn").onclick = ()=>{ initSettings(); renderFactors(STATE.data.meta.factors); recompute(); };
+$("#clearBtn").onclick = ()=>{
+  STATE.data.meta.factors.forEach(f=> STATE.settings[f.key].on=false);
+  renderFactors(STATE.data.meta.factors); recompute();
+};
+$("#topN").onchange = renderResults;
+$("#searchBox").oninput = renderResults;
+$("#refreshBtn").onclick = refreshData;
+
+load();
+</script>
+</body>
+</html>

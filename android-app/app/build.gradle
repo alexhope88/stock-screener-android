@@ -1,0 +1,40 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.stockscreener.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.stockscreener.app"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        // ===== 远程数据地址 =====
+        // 由 CI 通过环境变量 DATA_URL 注入（指向 gh-pages 分支的 raw URL）。
+        // 本地构建可不设（留空），App 仅使用内置离线数据。
+        buildConfigField "String", "DATA_URL", "\"" + (System.getenv("DATA_URL") ?: "") + "\""
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+}
